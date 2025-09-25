@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Texas Real Estate Offer Builder</title>
+  <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
+  <style>
+    body { font-family: sans-serif; margin: 0; padding: 0; background: #f9f9f9; }
+    .container { padding: 1.5rem; max-width: 600px; margin: auto; }
+    .question { display: none; flex-direction: column; background: white; padding: 1.5rem; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+    .question.active { display: flex; }
+    label { margin-bottom: 0.5rem; font-weight: bold; }
+    input, select, textarea { font-size: 1rem; padding: 0.5rem; border-radius: 6px; border: 1px solid #ccc; margin-bottom: 1rem; width: 100%; }
+    button { padding: 0.75rem 1rem; font-size: 1rem; margin-top: 1rem; border: none; border-radius: 8px; background-color: #007bff; color: white; cursor: pointer; }
+    button:disabled { background-color: #ccc; cursor: not-allowed; }
+    .error { color: red; font-size: 0.9rem; margin-bottom: 1rem; display: none; }
+    .loading { display: none; text-align: center; margin-top: 1rem; }
+    .progress { text-align: center; margin-bottom: 1rem; font-weight: bold; }
+    .checkbox-group { margin-bottom: 0.5rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="progress">Step <span id="currentStep">1</span> of 8</div>
+    <form id="offerForm" enctype="multipart/form-data">
+      <!-- STEP 1: Property URL -->
+      <div class="question active">
+        <label for="propertyUrl">Property Listing URL (Realtor.com, Zillow, or County Tax Site)</label>
+        <input id="propertyUrl" name="propertyUrl" type="url" required placeholder="https://www.realtor.com/..." />
+        <div class="error" id="error-step1"></div>
+        <div class="loading" id="loading-step1">Fetching property data...</div>
+        <button type="button" onclick="fetchPropertyData()">Fetch Property Data</button>
+        <button type="button" onclick="next(0)" id="next-step1" disabled>Next</button>
+      </div>
+
+      <!-- STEP 2: Property Details (Auto-filled) -->
+      <div class="question">
+        <label for="propertyKnownAs">Property Address (“Known as”)</label>
+        <input id="propertyKnownAs" name="propertyKnownAs" required />
+        <label for="legalLot">Lot</label>
+        <input id="legalLot" name="legalLot" />
+        <label for="legalBlock">Block</label>
+        <input id="legalBlock" name="legalBlock" />
+        <label for="legalAdditionCity">Subdivision (Addition City of)</label>
+        <input id="legalAdditionCity" name="legalAdditionCity" />
+        <label for="legalCounty">County</label>
+        <input id="legalCounty" name="legalCounty" />
+        <div class="error" id="error-step2"></div>
+        <button type="button" onclick="prev()">Back</button>
+        <button type="button" onclick="next(1)">Next</button>
+      </div>
+
+      <!-- STEP 3: Parties -->
+      <div class="question">
+        <label for="buyerName1">Buyer 1 Full Name</label>
+        <input id="buyerName1" name="buyerName1" required />
+        <label for="buyerName2">Buyer 2 Full Name (optional)</label>
+        <input id="buyerName2" name="buyerName2" />
+        <label for="sellerName1">Seller 1 Full Name</label>
+        <input id="sellerName1" name="sellerName1" required />
+        <label for="sellerName2">Seller 2 Full Name (optional)</label>
+        <input id="sellerName2" name="sellerName2" />
+        <div class="error" id="error-step3"></div>
+        <button type="button" onclick="prev()">Back</button>
+        <button type="button" onclick="next(2)">Next</button>
+      </div>
+
+      <!-- STEP 4: Exclusions -->
+      <div class="question">
+        <label for="exclusions">List any exclusions (optional)</label>
+        <textarea id="exclusions" name="exclusions"></textarea>
+        <div class="error" id="error-step4"></div>
+        <button type="button" onclick="prev()">Back</button>
+        <button type="button" onclick="next(3)">Next</button>
+      </div>
+
+      <!-- STEP 5: Price -->
+      <div class="question">
+        <label for="salesPrice">Total Sales Price</label>
+        <input id="salesPrice" name="salesPrice" type="number" step="0.01" required />
+        <label for="earnestMoney">Earnest Money</label>
+        <input id="earnestMoney" name="earnestMoney" type="number" step="0.01" required />
+        <label for="escrowLine1">Escrow Agent Info (Line 1)</label>
+        <input id="escrowLine1" name="escrowLine1" required />
+        <label for="escrowLine2">Escrow Agent Info (Line 2)</label>
+        <input id="escrowLine2" name="escrowLine2" />
+        <label for="optionFee">Option Fee</label>
+        <input id="optionFee" name="optionFee" type="number" step="0.01" />
+        <div class="error" id="error-step5"></div>
+        <button type="button" onclick="prev()">Back</button>
+        <button type="button" onclick="next(4)">Next</button>
+      </div>
+
+      <!-- STEP 6: Closing -->
+      <div class="question">
+        <label for="closingDate">Closing Date</label>
+        <input id="closingDate" type="date" name="closingDate" required />
+        <label for="email">Email to receive the signed offer</label>
+        <input id="email" name="email" type="email" required />
+        <div class="error" id="error-step6"></div>
+        <button type="button" onclick="prev()">Back</button>
+        <button type="button" onclick="next(5)">Next</button>
+      </div>
+
+      <!-- STEP 7: Notices and Disclosures (Section 22) -->
+      <div class="question">
+        <label>Check applicable notices/disclosures (Section 22):</label>
+        <div class="checkbox-group"><input type="checkbox" name="sellerDisclosure" /> Seller Disclosure Notice</div>
+        <div class="checkbox-group"><input type="checkbox" name="leadPaint" /> Lead-Based Paint Addendum (pre-1978)</div>
+        <div class="checkbox-group"><input type="checkbox" name="envAssessment" /> Environmental Assessments</div>
+        <div class="checkbox-group"><input type="checkbox" name="condoCertificate" /> Condominium Resale Certificate</div>
+        <div class="checkbox-group"><input type="checkbox" name="naturalHazards" /> Natural Hazards Disclosure</div>
+        <div class="checkbox-group"><input type="checkbox" name="unpermittedImprovements" /> Unpermitted Improvements</div>
+        <div class="checkbox-group"><input type="checkbox" name="restrictions" /> Restrictions</div>
+        <div class="checkbox-group"><input type="checkbox" name="propaneSystem" /> Propane Gas System</div>
+        <div class="checkbox-group"><input type="checkbox" name="serviceContract" /> Residential Service Contract</div>
+        <div class="checkbox-group"><input type="checkbox" name="bundleSale" /> Bundle Sale</div>
+        <div class="checkbox-group"><input type="checkbox" name="rightToReport" /> Right to Report</div>
+        <label for="additionalDocs">Upload additional documents (e.g., Seller Disclosure):</label>
+        <input type="file" id="additionalDocs" name="additionalDocs" multiple accept=".pdf" />
+        <div class="error" id="error-step7"></div>
+        <button type="button" onclick="prev()">Back</button>
+        <button type="button" onclick="next(6)">Next</button>
+      </div>
+
+      <!-- STEP 8: Addenda and Finalize -->
+      <div class="question">
+        <label>Include Addenda:</label>
+        <div class="checkbox-group"><input type="checkbox" name="useHOA" /> HOA Addendum</div>
+        <div class="checkbox-group"><input type="checkbox" name="useFinancing" /> Financing Addendum</div>
+        <div class="checkbox-group"><input type="checkbox" name="useSaleContingency" /> Sale of Other Property Addendum</div>
+        <label for="buyersPropertyAddress">Buyer's Property Address (for Sale Contingency)</label>
+        <input id="buyersPropertyAddress" name="buyersPropertyAddress" />
+        <label for="signingService">Select Signing Service (optional):</label>
+        <select id="signingService" name="signingService">
+          <option value="">None</option>
+          <option value="docusign">DocuSign</option>
+          <option value="hellosign">HelloSign</option>
+        </select>
+        <div class="error" id="error-step8"></div>
+        <button type="button" onclick="prev()">Back</button>
+        <button type="button" onclick="submitForm()">Finish & Download/Email/Sign PDF</button>
+      </div>
+      <div class="loading" id="loading">Processing, please wait...</div>
+    </form>
+  </div>
+
+  <script>
+    const steps = document.querySelectorAll('.question');
+    let current = 0;
+
+    function showError(stepIndex, message) {
+      const errorDiv = document.getElementById(`error-step${stepIndex + 1}`);
+      errorDiv.textContent = message;
+      errorDiv.style.display = 'block';
+    }
+
+    function clearError(stepIndex) {
+      const errorDiv = document.getElementById(`error-step${stepIndex + 1}`);
+      errorDiv.textContent = '';
+      errorDiv.style.display = 'none';
+    }
+
+    function validateStep(stepIndex) {
+      const step = steps[stepIndex];
+      const requiredInputs = step.querySelectorAll('input[required], textarea[required]');
+      for (const input of requiredInputs) {
+        if (!input.value.trim()) {
+          showError(stepIndex, `Please fill out all required fields.`);
+          return false;
+        }
+      }
+      if (stepIndex === 4) { // Price step
+        const salesPrice = step.querySelector('[name="salesPrice"]').value;
+        const earnestMoney = step.querySelector('[name="earnestMoney"]').value;
+        if (salesPrice && (isNaN(salesPrice) || salesPrice < 0)) {
+          showError(stepIndex, 'Sales Price must be a valid positive number.');
+          return false;
+        }
+        if (earnestMoney && (isNaN(earnestMoney) || earnestMoney < 0)) {
+          showError(stepIndex, 'Earnest Money must be a valid positive number.');
+          return false;
+        }
+      }
+      if (stepIndex === 5) { // Closing step
+        const email = step.querySelector('[name="email"]').value;
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+          showError(stepIndex, 'Please enter a valid email address.');
+          return false;
+        }
+      }
+      if (stepIndex === 7 && step.querySelector('input[name="useSaleContingency"]:checked') && !document.getElementById('buyersPropertyAddress').value.trim()) {
+        showError(stepIndex, 'Please provide the Buyer\'s Property Address for Sale Contingency.');
+        return false;
+      }
+      clearError(stepIndex);
+      return true;
+    }
+
+    function updateProgress() {
+      document.getElementById('currentStep').textContent = current + 1;
+    }
+
+    function next(stepIndex) {
+      if (validateStep(stepIndex)) {
+        steps[current].classList.remove('active');
+        current = Math.min(current + 1, steps.length - 1);
+        steps[current].classList.add('active');
+        updateProgress();
+      }
+    }
+
+    function prev() {
+      steps[current].classList.remove('active');
+      current = Math.max(current - 1, 0);
+      steps[current].classList.add('active');
+      updateProgress();
+    }
+
+    async function fetchPropertyData() {
+      const urlInput = document.getElementById('propertyUrl');
+      const url = urlInput.value.trim();
+      const loadingDiv = document.getElementById('loading-step1');
+      const nextButton = document.getElementById('next-step1');
+      loadingDiv.style.display = 'block';
+      nextButton.disabled = true;
+
+      const maxRetries = 2;
+      let attempt = 0;
+
+      while (attempt < maxRetries) {
+        try {
+          const apiToken = 'hYk2FDcGxWVtct61fOVjJQ'; // Your Crawlbase normal API token
+          console.log(`Attempt ${attempt + 1} fetching data from: ${url}`);
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 10000); // 10-second timeout
+
+          const response = await fetch(`https://api.crawlbase.com/scraper?token=${apiToken}&url=${encodeURIComponent(url)}&device_type=desktop`, {
+            method: 'GET',
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`HTTP error! Status: ${response.status} - ${errorText || response.statusText}`);
+          }
+          const data = await response.json();
+          console.log('API Response:', data);
+          if (!data.body && !data.error) throw new Error('No HTML content or error details in response');
+
+          if (data.error) throw new Error(`Crawlbase error: ${data.error}`);
+
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(data.body, 'text/html');
+          let propertyData = {};
+
+          if (url.includes('realtor.com')) {
+            propertyData = {
+              propertyKnownAs: doc.querySelector('h1.overview__address')?.textContent.trim() || doc.querySelector('h1.address')?.textContent.trim() || '',
+              legalLot: doc.querySelector('li.list-card-info-text:contains("Lot")')?.textContent.trim().match(/\d+/)?.[0] || '',
+              legalBlock: doc.querySelector('li.list-card-info-text:contains("Block")')?.textContent.trim().match(/\d+/)?.[0] || '',
+              legalAdditionCity: doc.querySelector('span[data-testid="address-subdivision"]')?.textContent.trim() || '',
+              legalCounty: doc.querySelector('span[data-testid="address-county"]')?.textContent.trim() || '',
+              salesPrice: doc.querySelector('span[data-testid="price"]')?.textContent.trim().replace(/[^0-9.]/g, '') || ''
+            };
+          } else if (url.includes('zillow.com')) {
+            propertyData = {
+              propertyKnownAs: doc.querySelector('address[data-test="property-card-addr"]')?.textContent.trim() || doc.querySelector('h1.address')?.textContent.trim() || '',
+              legalLot: doc.querySelector('div[data-test="lot-size"]')?.textContent.trim().match(/\d+/)?.[0] || '',
+              legalBlock: '', // Zillow may not provide block; adjust if needed
+              legalAdditionCity: doc.querySelector('span[data-test="subdivision"]')?.textContent.trim() || '',
+              legalCounty: doc.querySelector('span[data-test="county"]')?.textContent.trim() || '',
+              salesPrice: doc.querySelector('span[data-test="price-amount"]')?.textContent.trim().replace(/[^0-9.]/g, '') || ''
+            };
+          } else if (url.includes('dentoncounty.gov') || url.includes('collincounty.gov')) {
+            propertyData = {
+              propertyKnownAs: doc.querySelector('#propertyAddress')?.textContent.trim() || doc.querySelector('.property-address')?.textContent.trim() || '',
+              legalLot: doc.querySelector('#lotNumber')?.textContent.trim() || doc.querySelector('.lot-number')?.textContent.trim() || '',
+              legalBlock: doc.querySelector('#blockNumber')?.textContent.trim() || doc.querySelector('.block-number')?.textContent.trim() || '',
+              legalAdditionCity: doc.querySelector('#subdivision')?.textContent.trim() || doc.querySelector('.subdivision-name')?.textContent.trim() || '',
+              legalCounty: url.includes('dentoncounty.gov') ? 'Denton County' : 'Collin County'
+            };
+          } else {
+            throw new Error('Unsupported website. Please use Realtor.com, Zillow, or a county tax site.');
+          }
+
+          console.log('Extracted Data:', propertyData);
+          if (!propertyData.propertyKnownAs) throw new Error('No property data found. Check URL or selectors.');
+
+          document.getElementById('propertyKnownAs').value = propertyData.propertyKnownAs || '';
+          document.getElementById('legalLot').value = propertyData.legalLot || '';
+          document.getElementById('legalBlock').value = propertyData.legalBlock || '';
+          document.getElementById('legalAdditionCity').value = propertyData.legalAdditionCity || '';
+          document.getElementById('legalCounty').value = propertyData.legalCounty || '';
+          document.getElementById('salesPrice').value = propertyData.salesPrice || '';
+
+          nextButton.disabled = false;
+          clearError(0);
+          break; // Exit loop on success
+        } catch (err) {
+          console.error('Fetch Error:', err);
+          attempt++;
+          if (attempt === maxRetries) {
+            showError(0, `Error fetching property data after ${maxRetries} attempts: ${err.message}. Check console for details or disable browser blockers.`);
+          } else {
+            await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds before retry
+          }
+        }
+      }
+
+      loadingDiv.style.display = 'none';
+    }
+
+    async function submitForm() {
+      if (!validateStep(7)) return; // Validate the final step
+      const submitBtn = document.getElementById('submitBtn');
+      const loadingDiv = document.getElementById('loading');
+      const email = document.getElementById('email').value;
+      const signingService = document.getElementById('signingService').value;
+      const additionalDocs = document.getElementById('additionalDocs').files;
+      submitBtn.disabled = true;
+      loadingDiv.style.display = 'block';
+
+      try {
+        const data = Object.fromEntries(new FormData(document.getElementById('offerForm')).entries());
+        const { PDFDocument } = window.PDFLib;
+        const docs = [];
+
+        async function loadAndFill(path, fieldsMap) {
+          try {
+            const res = await fetch(path);
+            if (!res.ok) throw new Error(`Failed to fetch ${path}: ${res.statusText}`);
+            const pdfBytes = await res.arrayBuffer();
+            const pdfDoc = await PDFDocument.load(pdfBytes);
+            const form = pdfDoc.getForm();
+            const failedFields = [];
+            for (const [k, v] of Object.entries(fieldsMap)) {
+              try {
+                const field = form.getTextField(k);
+                if (v) field.setText(String(v));
+              } catch {
+                failedFields.push(k);
+              }
+            }
+            if (failedFields.length) console.warn(`Failed to map fields: ${failedFields.join(', ')}`);
+            docs.push(pdfDoc);
+          } catch (err) {
+            throw new Error(`Error processing ${path}: ${err.message}`);
+          }
+        }
+
+        // TREC Contract (TREC No. 20-18, Pages 1-2 fields)
+        await loadAndFill("./forms/trec_contract_1_4.pdf", {
+          "1 PARTIES The parties to this contract are": data.buyerName1,
+          "Buyer": data.buyerName2,
+          "Seller and": data.sellerName1,
+          "Seller": data.sellerName2,
+          "Texas known as": data.propertyKnownAs,
+          "Addition City of": data.legalAdditionCity,
+          "County of": data.legalCounty,
+          "A LAND Lot": data.legalLot,
+          "Block": data.legalBlock,
+          "be removed prior to delivery of possession": data.exclusions,
+          "B Sum of all financing described in the attached": data.salesPrice,
+          "earnest money of": data.earnestMoney,
+          "as earnest money to": data.escrowLine1,
+          "as earnest money to 2": data.escrowLine2,
+          "Option Fee in the form of": data.optionFee,
+          "A The closing of the sale will be on or before": data.closingDate,
+          "Address of Property": data.propertyKnownAs
+        });
+
+        // HOA Addendum (TREC No. 36-10)
+        if (data.useHOA) {
+          await loadAndFill("./forms/hoa_addendum.pdf", {
+            "(Street Address and City)": data.propertyKnownAs
+          });
+        }
+
+        // Financing Addendum (TREC No. 40-11)
+        if (data.useFinancing) {
+          await loadAndFill("./forms/third_party_financing_addendum.pdf", {
+            "(Street Address and City)": data.propertyKnownAs,
+            "A first mortgage loan in the principal amount of $": data.salesPrice || '',
+            "due in full in            year(s)": '30',
+            "with interest not to exceed         % per annum": '6.5',
+            "for the first             year(s) of the loan": '5',
+            "Origination Charges as shown on Buyer’s Loan Estimate for the loan not to exceed             % of the loan": '1'
+          });
+        }
+
+        // Sale of Other Property Addendum (TREC No. 10-6)
+        if (data.useSaleContingency) {
+          await loadAndFill("./forms/sale_of_other_property_addendum.pdf", {
+            "(Address)": data.buyersPropertyAddress || '',
+            "on or before                                                       , 20": data.closingDate || '',
+            "the                       day after Seller's notice to Buyer": '5',
+            "depositing $": data.earnestMoney || '',
+            "(Address of Property)": data.propertyKnownAs
+          });
+        }
+
+        // Merge all PDFs
+        const merged = await PDFDocument.create();
+        for (const doc of docs) {
+          const pages = await merged.copyPages(doc, doc.getPageIndices());
+          pages.forEach(p => merged.addPage(p));
+        }
+        const finalPdf = await merged.save();
+        const blob = new Blob([finalPdf], { type: "application/pdf" });
+
+        // Download PDF
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "Texas_Offer_Packet.pdf";
+        a.click();
+        URL.revokeObjectURL(a.href);
+
+        // Email PDF (using SendGrid with your API key)
+        if (email) {
+          const sendGridApiKey = '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';
+          const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${sendGridApiKey}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              personalizations: [{ to: [{ email }], subject: 'Your Texas Offer Packet' }],
+              from: { email: 'your-email@example.com' }, // Replace with your verified SendGrid sender
+              content: [{ type: 'text/plain', value: 'Attached is your Texas Offer Packet generated on ' + new Date().toLocaleString('en-US', { timeZone: 'America/Chicago' }) + '.' }],
+              attachments: [{
+                content: btoa(new Uint8Array(finalPdf).reduce((data, byte) => data + String.fromCharCode(byte), '')),
+                filename: 'Texas_Offer_Packet.pdf',
+                type: 'application/pdf',
+                disposition: 'attachment'
+              }]
+            })
+          });
+          if (!response.ok) throw new Error('Email sending failed: ' + (await response.text()));
+        }
+
+        // E-Signing with Dropbox Sign (HelloSign)
+        if (signingService === 'hellosign') {
+          const dropboxSignApiKey = '385c7f643c776c129b459eb367126ac829e509c5bc853b9c2e392e4789ffb9f4';
+          const pdfBase64 = btoa(new Uint8Array(finalPdf).reduce((data, byte) => data + String.fromCharCode(byte), ''));
+          const response = await fetch('https://api.hellosign.com/v3/signature_request/send', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Basic ${btoa(dropboxSignApiKey + ':')}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              title: 'Texas Offer Packet',
+              subject: 'Please sign the Texas Offer Packet',
+              message: 'Please sign the attached offer packet. Generated on ' + new Date().toLocaleString('en-US', { timeZone: 'America/Chicago' }) + '.',
+              signers: [{ email_address: email, name: data.buyerName1, role: 'Buyer' }, { email_address: data.sellerName1, name: data.sellerName1, role: 'Seller' }],
+              files: [{ file: pdfBase64, name: 'Texas_Offer_Packet.pdf' }],
+              metadata: { custom_id: '1234', custom_text: 'Offer Packet' }
+            })
+          });
+          const result = await response.json();
+          if (result.signature_request_id) {
+            window.open(`https://www.hellosign.com/home/mySignatureRequests/${result.signature_request_id}`, '_blank');
+          } else {
+            throw new Error('Failed to initiate signing: ' + JSON.stringify(result));
+          }
+        }
+
+      } catch (err) {
+        showError(7, `Error processing PDF: ${err.message}`);
+      } finally {
+        submitBtn.disabled = false;
+        loadingDiv.style.display = 'none';
+      }
+    }
+  </script>
+</body>
+</html>
